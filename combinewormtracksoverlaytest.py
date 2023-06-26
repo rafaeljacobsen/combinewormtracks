@@ -88,10 +88,16 @@ class Window(QMainWindow):
         self.centralWidget.setLayout(maingrid)
 
     def gotonextcomp(self):
-        self.gui.starttime=300
+        self.gui.enditer+=1
+        self.gui.starttime=self.gui.startend.loc[self.gui.ends[self.gui.enditer]].end-3
         self.gui.frame=self.gui.starttime
         self.gui.respond("update_data")
-        self.gui.graphstodraw=[11,323,335]
+        self.gui.graphstodraw=[]
+        end,endtime,endx,endy=list(self.gui.tracksdf[(self.gui.tracksdf.ID==self.gui.ends[self.gui.enditer])\
+                                                    & (self.gui.tracksdf.time==self.gui.startend.loc[self.gui.ends[self.gui.enditer]].end)].values)[0]
+        for ID in np.unique(self.gui.tracksdf.ID.values):
+            if len(self.gui.tracksdf[(self.gui.tracksdf.ID==ID)&(np.abs(endtime-self.gui.tracksdf.time)<20)&(np.abs(self.gui.tracksdf.x-endx)<150)&(np.abs(self.gui.tracksdf.y-endy)<150)]):
+                self.gui.graphstodraw.append(ID)
 
     def setcorrect(self):
         print("correct")
@@ -124,7 +130,7 @@ class GUI():
         #gets all of the track data out
         with open(precombinedwormtracks, 'rb') as handle:
             inputs = pickle.load(handle)
-        self.combos=inputs["combos"]
+        self.ends=inputs["ends"]
         self.tracksdf=inputs["tracksdf"]
         self.startend=inputs["startend"]
 
@@ -143,6 +149,7 @@ class GUI():
 
         #sets the first frame of the image to zero
         self.frame=0
+        self.enditer=-1#iterator that shows which track end the user is on
         self.graphstodraw=[]
 
     def start(self):
@@ -202,7 +209,7 @@ class TrackFig(pg.PlotWidget):
     def update_data(self,img):
         #have to transpose image for it to display correctly
         self.image.setImage(img[:,:],autoLevels=False,levels=[0,255])
-        colors=['r','g','b','p','o','y']
+        colors=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
         iter=0
         for key in self.plots.keys():
             self.plots[key].clear()

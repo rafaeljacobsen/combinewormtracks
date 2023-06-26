@@ -118,6 +118,47 @@ def precombinewormtracks(path):
         ID1,ID2=possiblecombos.loc[i][["ID1","ID2"]].values
         tracksdf.loc[tracksdf.ID==ID2,["ID"]]=ID1
         idstodrop.append(np.asarray(possiblecombos[possiblecombos.ID2==ID2].index))
+    idstodrop=np.concatenate(idstodrop).ravel()
+    tracksdf=tracksdf[np.isin(tracksdf.ID,idstodrop,invert=True)]
+
+
+    #creates dataframe with start and end times for each ID
+    startend=pd.DataFrame(columns=["start","end"])
+    for ID in np.unique(tracksdf.ID).astype(int):
+        startend.loc[ID,:]=int(np.min(tracksdf.loc[tracksdf.ID==ID].time)),int(np.max(tracksdf.loc[tracksdf.ID==ID].time))
+    startend.astype(int)
+
+    #creates density map of where tracks end
+    xs=[]
+    ys=[]
+    offscreens=[]
+    for ID in np.unique(tracksdf.ID.values):
+        x=np.round(tracksdf[(tracksdf.ID==ID)&(tracksdf.time==startend.loc[ID].end)].x.values[0],1)
+        y=np.round(tracksdf[(tracksdf.ID==ID)&(tracksdf.time==startend.loc[ID].end)].y.values[0],1)
+        if (x<10) or (x>np.max(tracksdf.x)-10) or (y<10) or (y>np.max(tracksdf.y)-10):
+            offscreens.append(int(ID))
+        xs.append(x)
+        ys.append(y)
+
+    nbins=400
+    densityhist=np.histogram2d(xs,ys,bins=nbins)
+    densityindexes=np.unravel_index(np.argsort(densityhist[0].flatten())[-30:-1], np.shape(np.histogram2d(xs,ys,bins=nbins)[0]))
+
+    statpixels=[]
+    print("Finding stationary pixels:")
+    for index1,index2 in tqdm(zip(densityindexes[0],densityindexes[1])):
+        tx=densityhist[1][index1]
+        ty=densityhist[1][index2]
+        for ID in np.unique(tracksdf.ID.values):
+            x=np.round(tracksdf[(tracksdf.ID==ID)&(tracksdf.time==startend.loc[ID].end)].x.values[0],1)
+            y=np.round(tracksdf[(tracksdf.ID==ID)&(tracksdf.time==startend.loc[ID].end)].y.values[0],1)
+            if (tx-5<x and x<tx+5) and (ty-5 < y and y < ty+5):
+                if len(tracksdf[tracksdf.ID==ID])<5 or (np.max(tracksdf[tracksdf.ID==ID].x.values)-np.min(tracksdf[tracksdf.ID==ID].x.values)<10 and np.max(tracksdf[tracksdf.ID==ID].y.values)-np.min(tracksdf[tracksdf.ID==ID].y.values)<10):
+                    statpixels.append(ID)
+                    #print(str(int(ID)) + ": " + str(x) + " " + str(y) + ", time = " + str(int(startend.loc[ID].end)) + ", number = " + str(len(tracksdf[tracksdf.ID==ID])))
+
+    #drops IDs that are probably still frames on screen
+    tracksdf=tracksdf[np.isin(tracksdf.ID,statpixels,invert=True)]
 
     #creates dataframe with start and end times for each ID
     startend=pd.DataFrame(columns=["start","end"])
@@ -137,20 +178,22 @@ def precombinewormtracks(path):
                     if np.linalg.norm(startlocation-endlocation) < 20:
                         possiblecombos.loc[len(possiblecombos.index)] = [int(ID),startID,endindex,end+1]#,np.linalg.norm(startlocation-endlocation)]
 
-    combos=[]
-    for ID in np.unique(tracksdf.ID).astype(int):
-        combo=list(np.flip(findpairreverse(ID,[],possiblecombos))[:-1])+findpair(ID,[],possiblecombos)
-        len(combo)>1 and combos.append(sorted(combo))
+    #will remove combos, shouldn't be how this is organized anymore
+    #combos=[]
+    #for ID in np.unique(tracksdf.ID).astype(int):
+    #    combo=list(np.flip(findpairreverse(ID,[],possiblecombos))[:-1])+findpair(ID,[],possiblecombos)
+    #    len(combo)>1 and combos.append(sorted(combo))
 
-    uniquecombos=[]
-    for combo in combos:
-        if combo not in uniquecombos:
-            uniquecombos.append(combo)
-    combos=uniquecombos
-    print("Number of combinations: "+str(len(combos)))
+    #uniquecombos=[]
+    #for combo in combos:
+    #    if combo not in uniquecombos:
+    #        uniquecombos.append(combo)
+    #combos=uniquecombos
+    #print("Number of combinations: "+str(len(combos)))
 
     outputs={}
-    outputs["combos"]=combos
+    outputs["ends"]=[i for i in np.unique(tracksdf.ID.values) if i not in np.asarray(offscreens)]
+    print(len(outputs["ends"]))
     outputs["tracksdf"]=tracksdf
     outputs["startend"]=startend
 
