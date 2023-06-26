@@ -24,6 +24,12 @@ class Window(QMainWindow):
         super().__init__()
         self.gui=gui
 
+        #clears the manual output file
+        self.writefile = open("manualoutput.txt", "w")
+        self.writefile.write("")
+        self.writefile.close()
+        self.writefile = open("manualoutput.txt", "a")
+
 
         #resizes the gui screen
         self.resize(int(self.gui.screen_w*0.3), self.gui.screen_h*4//5)
@@ -48,11 +54,14 @@ class Window(QMainWindow):
         #Labels and explanations for comparisons
         self.complabel = QLabel("Track evaluation explanation:",self)
         rightbartop.addWidget(self.complabel)
+        self.compind = QLabel("",self)
+        self.compind.setWordWrap(True)
+        rightbarmiddle.addWidget(self.compind)
         self.compexp = QLabel("",self)
         rightbarmiddle.addWidget(self.compexp)
 
         self.comboboxes=[]
-        for i in range(4):
+        for i in range(5):
             self.comboboxes.append(QComboBox())
 
         rightbar.setSpacing(5)
@@ -87,6 +96,16 @@ class Window(QMainWindow):
         self.addchange2.setFixedWidth(100)
         self.addchange2.clicked.connect(self.addchange2func)
         rightbar.addWidget(self.addchange2)
+
+
+        self.text6 = QLabel("Option 3: Delete",self)
+        rightbar.addWidget(self.text6)
+        self.comboboxes[4].setFixedWidth(100)
+        rightbar.addWidget(self.comboboxes[4])
+        self.addchange3 = QPushButton("Add change",self)
+        self.addchange3.setFixedWidth(100)
+        self.addchange3.clicked.connect(self.addchange3func)
+        rightbar.addWidget(self.addchange3)
         verticalSpacer = QSpacerItem(10, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         rightbar.addItem(verticalSpacer)
 
@@ -112,9 +131,11 @@ class Window(QMainWindow):
         self.frameshow.setText(str(0))
         self.frameshow.editingFinished.connect(self.updateframe)
 
-        #sets the ratio of the items in the top row
+        #sets the ratio of the items in the top and bottom row
         toprow.setColumnStretch(0, 2)
         toprow.setColumnStretch(1, 2)
+        bottomrow.setColumnStretch(0, 2)
+        bottomrow.setColumnStretch(1, 2)
 
         #adds buttons that affect the comparisons
         self.nextcomp = QPushButton('Next comparison', self)
@@ -123,6 +144,18 @@ class Window(QMainWindow):
         self.prevcomp = QPushButton('Previous comparison', self)
         self.prevcomp.clicked.connect(self.gotoprevcomp)
         bottomrow.addWidget(self.prevcomp,0,1)
+
+
+        #adds a comparison index display icon and label
+        self.complabel = QLabel("Comparison: ",self)
+        self.complabel.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        bottomrow.addWidget(self.complabel,0,2)
+
+        #adds a box that both shows and edits the current comparison index
+        self.compshow = QLineEdit(self)
+        bottomrow.addWidget(self.compshow,0,3)
+        self.compshow.setText("NaN")
+        self.compshow.editingFinished.connect(self.updatecomp)
 
         #adds layouts to main grid
         maingrid.addLayout(bottomrow,1,0)
@@ -139,47 +172,44 @@ class Window(QMainWindow):
 
 
     def addchange1func(self):
-        print("addchange1func")
+        ID1=int(self.comboboxes[0].currentText())
+        ID2=int(self.comboboxes[1].currentText())
+        self.gui.tracksdf.loc[self.gui.tracksdf.ID==ID2,["ID"]]=ID1
+        self.gui.tracksdf=self.gui.tracksdf[np.isin(self.gui.tracksdf.ID,[ID2],invert=True)]
+        self.writefile.write("Combined tracks "+str(ID1)+" and "+str(ID2)+"\n")
+        self.gui.respond("update_data")
+
     def addchange2func(self):
-        print("addchange2func")
+        ID1=int(self.comboboxes[2].currentText())
+        ID2=int(self.comboboxes[3].currentText())
+        time=int(self.timeedit.text())
+        self.gui.tracksdf.loc[(self.gui.tracksdf.ID==ID1)&(self.gui.tracksdf.time>=time),["ID"]]=ID2
+        self.writefile.write("Switched track "+str(ID1)+" to "+str(ID2)+" at time "+str(time)+"\n")
+        self.gui.respond("update_data")
+
+
+    def addchange3func(self):
+        ID1=int(self.comboboxes[4].currentText())
+        self.gui.tracksdf=self.gui.tracksdf[(self.gui.tracksdf.ID!=ID1)]
+        self.writefile.write("Deleted ID "+str(ID1)+"\n")
+        self.gui.respond("update_data")
+
 
     def gotonextcomp(self):
         self.gui.enditer+=1
-        self.gui.starttime=self.gui.startend.loc[self.gui.ends[self.gui.enditer]].end-5
-        self.gui.frame=self.gui.starttime+10
-        self.gui.graphstodraw=[]
-        #gets all the data about when/where the worm track ends
-        end,endtime,endx,endy=list(self.gui.tracksdf[(self.gui.tracksdf.ID==self.gui.ends[self.gui.enditer])\
-                                                    & (self.gui.tracksdf.time==self.gui.startend.loc[self.gui.ends[self.gui.enditer]].end)].values)[0]
-        comptext="Track "+str(int(end))+" ended at time t="+str(int(endtime))
-        self.compexp.setText(f"<p style='background-color:white'>{comptext}</p>")
-        timedist=40
-        spacedist=200
-        #gets all the tagged worms in the area
-        for ID in np.unique(self.gui.tracksdf.ID.values):
-            if len(self.gui.tracksdf[(self.gui.tracksdf.ID==ID)&(np.abs(endtime-self.gui.tracksdf.time)<timedist)&(np.abs(self.gui.tracksdf.x-endx)<spacedist)&(np.abs(self.gui.tracksdf.y-endy)<spacedist)]):
-                self.gui.graphstodraw.append(int(ID))
-        for i in range(4):
-            self.comboboxes[i].addItems(list(map(str, np.sort(self.gui.graphstodraw))))
-        self.gui.respond("update_data")
+        self.compshow.setText(str(self.gui.enditer+1))
+        self.gui.respond("update_comp")
+
+    def updatecomp(self):
+        if self.compshow.text().isdigit():
+            self.gui.enditer=int(self.compshow.text())
+            self.gui.respond("update_comp")
 
     def gotoprevcomp(self):
-        self.gui.enditer-=1
-        self.gui.starttime=self.gui.startend.loc[self.gui.ends[self.gui.enditer]].end-5
-        self.gui.frame=self.gui.starttime+10
-        self.gui.graphstodraw=[]
-        #gets all the data about when/where the worm track ends
-        end,endtime,endx,endy=list(self.gui.tracksdf[(self.gui.tracksdf.ID==self.gui.ends[self.gui.enditer])\
-                                                    & (self.gui.tracksdf.time==self.gui.startend.loc[self.gui.ends[self.gui.enditer]].end)].values)[0]
-        comptext="Track "+str(int(end))+" ended at time t="+str(int(endtime))
-        self.compexp.setText(f"<p style='background-color:white'>{comptext}</p>")
-        timedist=40
-        spacedist=200
-        #gets all the tagged worms in the area
-        for ID in np.unique(self.gui.tracksdf.ID.values):
-            if len(self.gui.tracksdf[(self.gui.tracksdf.ID==ID)&(np.abs(endtime-self.gui.tracksdf.time)<timedist)&(np.abs(self.gui.tracksdf.x-endx)<spacedist)&(np.abs(self.gui.tracksdf.y-endy)<spacedist)]):
-                self.gui.graphstodraw.append(ID)
-        self.gui.respond("update_data")
+        if self.gui.enditer >= 1:
+            self.gui.enditer-=1
+        self.compshow.setText(str(self.gui.enditer+1))
+        self.gui.respond("update_comp")
 
     def closeEvent(self, event): #correctly closes the gui
         self.gui.respond("close")
@@ -236,6 +266,10 @@ class GUI():
     def respond(self,key,val=None):
         if key=="close": #closes the application
             self.close=True
+        elif key=="update_comp":
+            if self.close:
+                return
+            self.win.figurewidget.update_comp()
         elif key=="update_data": #key to update the data in on the screen
             if self.close:
                 return
@@ -289,7 +323,7 @@ class TrackFig(pg.PlotWidget):
     def update_data(self,img):
         #have to transpose image for it to display correctly
         self.image.setImage(img[:,:],autoLevels=False,levels=[0,255])
-        colors=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+        colors=np.tile(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#17becf'],3)
         iter=0
         for key in self.plots.keys():
             self.plots[key].clear()
@@ -302,12 +336,47 @@ class TrackFig(pg.PlotWidget):
                 y=self.gui.tracksdf[(self.gui.tracksdf.ID==track)&(self.gui.tracksdf.time==time)].y.values
                 len(x) > 0 and xs.append(x[0])
                 len(y) > 0 and ys.append(y[0])
-            self.plots[track] = pg.PlotDataItem(x=xs, y=ys, pen=pg.mkPen(colors[iter],width=3))
+            if iter <= 7:
+                self.plots[track] = pg.PlotDataItem(x=xs, y=ys, pen=pg.mkPen(colors[iter],width=5,style=QtCore.Qt.SolidLine))
+            elif iter <= 14:
+                self.plots[track] = pg.PlotDataItem(x=xs, y=ys, pen=pg.mkPen(colors[iter],width=5,style=QtCore.Qt.DotLine))
+            elif iter <= 21:
+                self.plots[track] = pg.PlotDataItem(x=xs, y=ys, pen=pg.mkPen(colors[iter],width=5,style=QtCore.Qt.DashLine))
             #print("xs: "+str(np.round(xs,2)))
             #print("ys: "+str(np.round(ys,2)))
             self.addItem(self.plots[track])
             self.legend.addItem(self.plots[track],str(int(track)))
             iter+=1
+
+    def update_comp(self):
+        self.gui.starttime=self.gui.startend.loc[self.gui.ends[self.gui.enditer]].end-5
+        self.gui.frame=self.gui.starttime+10
+        self.gui.graphstodraw=[]
+        #gets all the data about when/where the worm track ends
+        if self.gui.ends[self.gui.enditer] not in self.gui.tracksdf.ID.values:
+            self.gui.win.compind.setText(f"<p style='background-color:white'>Track already removed or merged, go to next comparison.</p>")
+            self.gui.win.compexp.setText(f"<p style='background-color:white'></p>")
+            for i in range(5):
+                self.gui.win.comboboxes[i].clear()
+            self.gui.respond("update_data")
+        else:
+            end,endtime,endx,endy=list(self.gui.tracksdf[(self.gui.tracksdf.ID==self.gui.ends[self.gui.enditer])\
+                                                        & (self.gui.tracksdf.time==self.gui.startend.loc[self.gui.ends[self.gui.enditer]].end)].values)[0]
+            compindtext="Comparison "+str(int(self.gui.enditer+1))+" out of "+str(int(len(self.gui.ends)))
+            self.gui.win.compind.setText(f"<p style='background-color:white'>{compindtext}</p>")
+            compexptext="Track "+str(int(end))+" ended at time t="+str(int(endtime))
+            self.gui.win.compexp.setText(f"<p style='background-color:white'>{compexptext}</p>")
+            timedist=70
+            spacedist=200
+            #gets all the tagged worms in the area
+            for ID in np.unique(self.gui.tracksdf.ID.values):
+                if len(self.gui.tracksdf[(self.gui.tracksdf.ID==ID)&(np.abs(endtime-self.gui.tracksdf.time)<timedist)&(np.abs(self.gui.tracksdf.x-endx)<spacedist)&(np.abs(self.gui.tracksdf.y-endy)<spacedist)]):
+                    self.gui.graphstodraw.append(int(ID))
+            for i in range(5):
+                self.gui.win.comboboxes[i].clear()
+                self.gui.win.comboboxes[i].addItems(list(map(str, np.sort(self.gui.graphstodraw))))
+            self.gui.respond("update_data")
+
 
 
 if __name__ == '__main__':

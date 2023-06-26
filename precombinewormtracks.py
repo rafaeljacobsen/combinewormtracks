@@ -26,29 +26,29 @@ def precombinewormtracks(path):
     tracksdf=pd.DataFrame(tracks, columns = ['ID','time','x','y'])
 
     #removes womrs with a mean angle between points less than 120
-    meanangles=pd.DataFrame(columns=["meanangle"],index=np.unique(tracksdf.ID).astype(int))
-    print("Removes slow and erratic worms:")
-    for ID in tqdm(np.unique(tracksdf.ID).astype(int)):
-        if len(tracksdf.loc[tracksdf.ID==ID])<6:
-            meanangles.loc[ID]=120
-            continue
-        start=int(min(tracksdf.loc[tracksdf.ID==ID].time))
-        end=int(max(tracksdf.loc[tracksdf.ID==ID].time))
-        #takes three consecutive points in time and calculates the engle between them
-        a=tracksdf.loc[(tracksdf.ID==ID)
-                       &(start<tracksdf.time)
-                       &(tracksdf.time<end-2)]
-        b=tracksdf.loc[(tracksdf.ID==ID)
-                       &(start+1<tracksdf.time)
-                       &(tracksdf.time<end-1)]
-        c=tracksdf.loc[(tracksdf.ID==ID)
-                       &(start+2<tracksdf.time)
-                       &(tracksdf.time<end)]
-        meanangles.loc[ID]=np.mean(np.abs(np.degrees(np.arctan2(np.asarray(c.y)-np.asarray(b.y),
-                                                                          np.asarray(c.x)-np.asarray(b.x))
-                                                               - np.arctan2(np.asarray(a.y)-np.asarray(b.y),
-                                                                            np.asarray(a.x)-np.asarray(b.x)))))
-    tracksdf=tracksdf[np.isin(np.asarray(tracksdf.ID),meanangles[meanangles.meanangle>=120].index)]
+    #meanangles=pd.DataFrame(columns=["meanangle"],index=np.unique(tracksdf.ID).astype(int))
+    #print("Removes slow and erratic worms:")
+    #for ID in tqdm(np.unique(tracksdf.ID).astype(int)):
+    #    if len(tracksdf.loc[tracksdf.ID==ID])<6:
+    #        meanangles.loc[ID]=120
+    #        continue
+    #    start=int(min(tracksdf.loc[tracksdf.ID==ID].time))
+    #    end=int(max(tracksdf.loc[tracksdf.ID==ID].time))
+    #    #takes three consecutive points in time and calculates the engle between them
+    #    a=tracksdf.loc[(tracksdf.ID==ID)
+    #                   &(start<tracksdf.time)
+    #                   &(tracksdf.time<end-2)]
+    #    b=tracksdf.loc[(tracksdf.ID==ID)
+    #                   &(start+1<tracksdf.time)
+    #                   &(tracksdf.time<end-1)]
+    #    c=tracksdf.loc[(tracksdf.ID==ID)
+    #                   &(start+2<tracksdf.time)
+    #                   &(tracksdf.time<end)]
+    #    meanangles.loc[ID]=np.mean(np.abs(np.degrees(np.arctan2(np.asarray(c.y)-np.asarray(b.y),
+    #                                                                      np.asarray(c.x)-np.asarray(b.x))
+    #                                                           - np.arctan2(np.asarray(a.y)-np.asarray(b.y),
+    #                                                                        np.asarray(a.x)-np.asarray(b.x)))))
+    #tracksdf=tracksdf[np.isin(np.asarray(tracksdf.ID),meanangles[meanangles.meanangle>=120].index)]
 
     #creates dataframe with start and end times for each ID
     startend=pd.DataFrame(columns=["start","end"])
@@ -87,7 +87,6 @@ def precombinewormtracks(path):
                -tracksdf[(tracksdf.ID==ID2) & (tracksdf.time==startend.loc[ID2].start)][["x","y"]].values[0])
         #finds the location of the end of ID1
         ID1end=tracksdf[(tracksdf.ID==ID1)&(tracksdf.time==max(tracksdf[tracksdf.ID==ID1].time))][["x","y"]].values[0]
-
         #finds the location of the start of ID2
         ID2start=tracksdf[(tracksdf.ID==ID2)&(tracksdf.time==min(tracksdf[tracksdf.ID==ID2].time))][["x","y"]].values[0]
 
@@ -113,13 +112,16 @@ def precombinewormtracks(path):
     if np.any(np.unique(possiblecombos.loc[confirmeds].ID1,return_counts=True)[1]!=1) or np.any(np.unique(possiblecombos.loc[confirmeds].ID2,return_counts=True)[1]!=1):
         print("ERROR: PRELIMINARY CLASSIFICATION FAILED: DUPLICATE MADE")
 
-    idstodrop=[]
-    for i in confirmeds: #i represents the index of correct combo
-        ID1,ID2=possiblecombos.loc[i][["ID1","ID2"]].values
-        tracksdf.loc[tracksdf.ID==ID2,["ID"]]=ID1
-        idstodrop.append(np.asarray(possiblecombos[possiblecombos.ID2==ID2].index))
-    idstodrop=np.concatenate(idstodrop).ravel()
-    tracksdf=tracksdf[np.isin(tracksdf.ID,idstodrop,invert=True)]
+    with open('combinedids.txt', 'w') as f:
+        idstodrop=[]
+        for i in confirmeds: #i represents the index of correct combo
+            ID1,ID2=possiblecombos.loc[i][["ID1","ID2"]].values
+            tracksdf.loc[tracksdf.ID==ID2,["ID"]]=ID1
+            idstodrop.append(np.asarray(possiblecombos[possiblecombos.ID2==ID2].index))
+            f.write('ID1: '+str(ID1)+', ID2: '+str(ID2))
+            f.write('\n')
+        idstodrop=np.concatenate(idstodrop).ravel()
+        tracksdf=tracksdf[np.isin(tracksdf.ID,idstodrop,invert=True)]
 
 
     #creates dataframe with start and end times for each ID
@@ -192,8 +194,9 @@ def precombinewormtracks(path):
     #print("Number of combinations: "+str(len(combos)))
 
     outputs={}
-    outputs["ends"]=[i for i in np.unique(tracksdf.ID.values) if i not in np.asarray(offscreens)]
-    print(len(outputs["ends"]))
+    ends=[i for i in np.unique(tracksdf.ID.values) if i not in np.asarray(offscreens)]
+    outputs["ends"]=[x for _, x in sorted(zip(startend.loc[ends].end.values, ends))]
+    print("Number of ends: "+str(len(outputs["ends"])))
     outputs["tracksdf"]=tracksdf
     outputs["startend"]=startend
 
