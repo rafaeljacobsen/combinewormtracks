@@ -1,1 +1,1 @@
-# combinewormtracks
+First, run precombinewormtracks.py on your npy file. Then, use the output to run the command python3 combinewormtracksgui.py [H5 datafile] [generated pickle file]. It should open a GUI. Click next combination to see the combinations and zoom into the graph to see what to do with the tracks. Respond with the buttons on the right panel. The program then outputs the modified tracks to outputtracks.cvs when the gui is closed.

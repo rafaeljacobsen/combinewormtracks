@@ -4,6 +4,7 @@ import pandas as pd
 from tqdm import tqdm
 import pickle
 import sys
+import h5py
 
 def findpair(ID2,history,possiblecombos):
     if ID2 in list(possiblecombos.ID1):
@@ -22,9 +23,16 @@ def findpairreverse(ID1,history,possiblecombos):
         return(history+[ID1])
 
 def precombinewormtracks(path):
-    tracks=np.load(path)
-    tracksdf=pd.DataFrame(tracks, columns = ['ID','time','x','y'])
-
+    if path[-3:]=="npy":
+        tracks=np.load(path)
+        tracksdf=pd.DataFrame(tracks, columns = ['ID','time','x','y'])
+    elif path[-3:]=="csv":
+        tracksdf=pd.read_csv("outputtracks.csv")
+        tracksdf=tracksdf.drop(columns=['Unnamed: 0'])
+    elif path[-2:]=="h5":
+        img=h5py.File(path,"r+")
+        tracks=img["points"]
+        tracksdf=pd.DataFrame(tracks, columns = ['ID','time','x','y'])
     #removes womrs with a mean angle between points less than 120
     #meanangles=pd.DataFrame(columns=["meanangle"],index=np.unique(tracksdf.ID).astype(int))
     #print("Removes slow and erratic worms:")
@@ -52,14 +60,24 @@ def precombinewormtracks(path):
 
     #creates dataframe with start and end times for each ID
     startend=pd.DataFrame(columns=["start","end"])
+    tracksdf=tracksdf.dropna()
     for ID in np.unique(tracksdf.ID).astype(int):
-        startend.loc[ID,:]=int(np.min(tracksdf.loc[tracksdf.ID==ID].time)),int(np.max(tracksdf.loc[tracksdf.ID==ID].time))
+        if ID < 0:
+            print(ID)
+            tracksdf=tracksdf[tracksdf.ID!=ID]
+        else:
+            startend.loc[ID,:]=int(np.nanmin(tracksdf.loc[tracksdf.ID==ID].time)),int(np.nanmax(tracksdf.loc[tracksdf.ID==ID].time))
     startend=startend.astype(int)
-
+    print(np.unique(tracksdf.ID))
     #gets all possible combinations of two indexes within 10 frames and 20 distance
     possiblecombos=pd.DataFrame(columns=["ID1","ID2","end","start"])#,"dist"])
-    print("Finds all possible track combinations")
+    idstodrop=[]
+    print("Finds all possible track combinations and drops short tracks")
     for ID in tqdm(np.unique(tracksdf.ID)):
+        length=len(tracksdf[tracksdf.ID==ID])
+        if length<4:
+            idstodrop.append(ID)
+        #print(ID)
         endindex=startend.loc[ID].end
         endlocation=tracksdf.loc[(tracksdf.ID==ID) & (tracksdf.time==endindex),["x","y"]].values
         for end in range(endindex,endindex+10):
@@ -113,14 +131,13 @@ def precombinewormtracks(path):
         print("ERROR: PRELIMINARY CLASSIFICATION FAILED: DUPLICATE MADE")
 
     with open('combinedids.txt', 'w') as f:
-        idstodrop=[]
+        f.write('Dropping: '+str(idstodrop))
         for i in confirmeds: #i represents the index of correct combo
             ID1,ID2=possiblecombos.loc[i][["ID1","ID2"]].values
             tracksdf.loc[tracksdf.ID==ID2,["ID"]]=ID1
-            idstodrop.append(np.asarray(possiblecombos[possiblecombos.ID2==ID2].index))
+            idstodrop.append(ID2)
             f.write('ID1: '+str(ID1)+', ID2: '+str(ID2))
             f.write('\n')
-        idstodrop=np.concatenate(idstodrop).ravel()
         tracksdf=tracksdf[np.isin(tracksdf.ID,idstodrop,invert=True)]
 
 
@@ -195,6 +212,7 @@ def precombinewormtracks(path):
 
     outputs={}
     ends=[i for i in np.unique(tracksdf.ID.values) if i not in np.asarray(offscreens)]
+    ends=[i for i in ends if np.max(tracksdf[tracksdf.ID==i].time.values)<np.max(tracksdf.time.values)-15]
     outputs["ends"]=[x for _, x in sorted(zip(startend.loc[ends].end.values, ends))]
     print("Number of ends: "+str(len(outputs["ends"])))
     outputs["tracksdf"]=tracksdf
