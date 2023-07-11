@@ -12,9 +12,9 @@ import argparse
 import time as TIME
 
 class GUI():
-    def __init__(self,imgpath,precombinedwormtracks):
+    def __init__(self,imgpath,precombinedwormtracks,rotate,sumarraypath):
         self.close=False
-
+        self.rotate=rotate
         #gets all of the track data out
         with open(precombinedwormtracks, 'rb') as handle:
             inputs = pickle.load(handle)
@@ -30,7 +30,7 @@ class GUI():
         #gets maximum frame
         self.maxframe=np.max([int(x) for x in list(self.imgdata.keys()) if x.isdigit()])
         #path of file that sums up all of the images, useful for normalizing later
-        self.sumarray=np.load("sumarray.npy")
+        self.sumarray=np.load(sumarraypath)
         self.app = QApplication(sys.argv)
 
         #creates screen with screen width and screen height
@@ -80,6 +80,9 @@ class GUI():
             #normalizes data
             self.win.frameshow.setText(str(self.frame))
             img=(self.imgdata[str(self.frame)]['frame'][0].max(2)-self.sumarray/self.maxframe)
+            if self.rotate:
+                img=img.T
+                #img=np.rot90(img,3)
             xMin=0
             xMax=1944
             yMin=0

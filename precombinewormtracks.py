@@ -1,11 +1,10 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
 import pickle
 import sys
 import h5py
-
+import argparse
 def findpair(ID2,history,possiblecombos):
     if ID2 in list(possiblecombos.ID1):
         #need to consider that there may be more than one possibility for an end point
@@ -22,13 +21,16 @@ def findpairreverse(ID1,history,possiblecombos):
     else:
         return(history+[ID1])
 
-def precombinewormtracks(path):
+def precombinewormtracks(path,type):
     if path[-3:]=="npy":
         tracks=np.load(path)
         tracksdf=pd.DataFrame(tracks, columns = ['ID','time','x','y'])
     elif path[-3:]=="csv":
-        tracksdf=pd.read_csv("outputtracks.csv")
-        tracksdf=tracksdf.drop(columns=['Unnamed: 0'])
+        if type == "numpy":
+            tracksdf=pd.DataFrame(np.genfromtxt(path), columns = ['ID','time','x','y'])
+        else:
+            tracks=pd.read_csv(path)
+            tracksdf=tracksdf.drop(columns=['Unnamed: 0'])
     elif path[-2:]=="h5":
         img=h5py.File(path,"r+")
         tracks=img["points"]
@@ -68,7 +70,7 @@ def precombinewormtracks(path):
         else:
             startend.loc[ID,:]=int(np.nanmin(tracksdf.loc[tracksdf.ID==ID].time)),int(np.nanmax(tracksdf.loc[tracksdf.ID==ID].time))
     startend=startend.astype(int)
-    print(np.unique(tracksdf.ID))
+
     #gets all possible combinations of two indexes within 10 frames and 20 distance
     possiblecombos=pd.DataFrame(columns=["ID1","ID2","end","start"])#,"dist"])
     idstodrop=[]
@@ -77,6 +79,7 @@ def precombinewormtracks(path):
         length=len(tracksdf[tracksdf.ID==ID])
         if length<4:
             idstodrop.append(ID)
+            continue
         #print(ID)
         endindex=startend.loc[ID].end
         endlocation=tracksdf.loc[(tracksdf.ID==ID) & (tracksdf.time==endindex),["x","y"]].values
@@ -87,6 +90,17 @@ def precombinewormtracks(path):
                     if np.linalg.norm(startlocation-endlocation) < 20:
                         possiblecombos.loc[len(possiblecombos.index)] = [int(ID),startID,endindex,end+1]#,np.linalg.norm(startlocation-endlocation)]
 
+
+    with open('combinedids.txt', 'w') as f:
+        f.write('Dropping: '+str(idstodrop))
+        print('Dropping: '+str(len(idstodrop)))
+        tracksdf=tracksdf[np.isin(tracksdf.ID,idstodrop,invert=True)]
+        possiblecombos=possiblecombos[np.isin(possiblecombos.ID1,idstodrop,invert=True)]
+        possiblecombos=possiblecombos[np.isin(possiblecombos.ID2,idstodrop,invert=True)]
+        possiblecombos=possiblecombos.reset_index()
+
+
+    idstodrop = []
     #finds all certain combinations
     dists=[]
     angles=[]
@@ -97,6 +111,8 @@ def precombinewormtracks(path):
         ID2=int(possiblecombos[possiblecombos.index==i].ID2.iloc[0])#stores IDs for the start and end track
         lengths[i,:]=[len(tracksdf[tracksdf.ID==ID1]),len(tracksdf[tracksdf.ID==ID2])] #stores the lengths of each track
 
+        if len(tracksdf[(tracksdf.ID==ID1)].values) == 1 or len(tracksdf[(tracksdf.ID==ID2)].values) == 1:
+            continue
         #finds the difference between the last points of ID1
         diff1=(tracksdf[(tracksdf.ID==ID1) & (tracksdf.time==startend.loc[ID1].end)][["x","y"]].values[0]
                -tracksdf[(tracksdf.ID==ID1) & (tracksdf.time==startend.loc[ID1].end-1)][["x","y"]].values[0])
@@ -127,6 +143,9 @@ def precombinewormtracks(path):
                       & (lengths[:,0]>=4)
                       & (lengths[:,1]>4)
                       & (np.asarray(angles)<60))[0]
+
+    print("number of tracks combined: "+str(len(confirmeds)))
+
     if np.any(np.unique(possiblecombos.loc[confirmeds].ID1,return_counts=True)[1]!=1) or np.any(np.unique(possiblecombos.loc[confirmeds].ID2,return_counts=True)[1]!=1):
         print("ERROR: PRELIMINARY CLASSIFICATION FAILED: DUPLICATE MADE")
 
@@ -176,6 +195,7 @@ def precombinewormtracks(path):
                     statpixels.append(ID)
                     #print(str(int(ID)) + ": " + str(x) + " " + str(y) + ", time = " + str(int(startend.loc[ID].end)) + ", number = " + str(len(tracksdf[tracksdf.ID==ID])))
 
+    print("number of tracks that are stationary: "+str(len(statpixels)))
     #drops IDs that are probably still frames on screen
     tracksdf=tracksdf[np.isin(tracksdf.ID,statpixels,invert=True)]
 
@@ -222,5 +242,12 @@ def precombinewormtracks(path):
         pickle.dump(outputs, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 if __name__ == "__main__":
-    path = sys.argv[1]
-    precombinewormtracks(path)
+    parser = argparse.ArgumentParser(description='Precombine worm tracks')
+    parser.add_argument('pointpath', help='points path')
+    parser.add_argument('-type', type=str, default="numpy", help='type of dataset, either numpy or pandas')
+
+    args=parser.parse_args()
+
+    pointpath=args.pointpath
+    type=args.type
+    precombinewormtracks(pointpath,type)
