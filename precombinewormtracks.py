@@ -29,7 +29,7 @@ def precombinewormtracks(path,type):
         if type == "numpy":
             tracksdf=pd.DataFrame(np.genfromtxt(path), columns = ['ID','time','x','y'])
         else:
-            tracks=pd.read_csv(path)
+            tracksdf=pd.read_csv(path)
             tracksdf=tracksdf.drop(columns=['Unnamed: 0'])
     elif path[-2:]=="h5":
         img=h5py.File(path,"r+")
