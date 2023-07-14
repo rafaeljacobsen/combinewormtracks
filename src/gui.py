@@ -84,9 +84,9 @@ class GUI():
                 img=img.T
                 #img=np.rot90(img,3)
             xMin=0
-            xMax=1944
+            xMax=np.shape(img)[0]
             yMin=0
-            yMax=1944
+            yMax=np.shape(img)[1]
             #sets x and y limits
             self.win.figurewidget.setLimits(xMin=xMin, xMax=xMax, yMin=yMin, yMax=yMax)
             #calls the update data program
