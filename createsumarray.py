@@ -5,10 +5,10 @@ from tqdm import tqdm
 import argparse
 def createsumarray(path,output):
     images = h5py.File(path,'r+')
-    sumarray=np.zeros(np.shape(images["1"]['frame'][0].max(2)))
-    for i in tqdm(np.asarray(list(images.keys()))):
-        if i.isdigit():
-            sumarray+=images[i]['frame'][0].max(2)
+    sumarray=np.zeros(np.shape(images["1"]))
+    # for i in tqdm(np.asarray(list(images.keys()))):
+    #     if i.isdigit():
+    #         sumarray+=images[i]
     np.save(output,sumarray)
 
 

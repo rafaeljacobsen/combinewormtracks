@@ -14,19 +14,18 @@ def labelworms(imgpath,sumarraypath,frames,output,thresh):
     for i in images.keys():
         if i.isdigit():
             keyids.append(int(i))
-    thresh=20
-    img=images["0"]['frame'][0].max(2)-sumarray/np.max(keyids)
+    thresh=30
+    img=images["0"]-sumarray/np.max(keyids)
     img=np.vectorize(lambda x: 0 if x <thresh else 1)(img)
     img=np.array(img*255, np.uint8)
-    #plt.imshow(img,cmap='Greys')
     ID=1
     frame0=np.zeros((1,4),dtype=float)
 
     _, threshold = cv2.threshold(img, thresh, 255, cv2.THRESH_BINARY)
-    contours, hierarchy = cv2.findContours(threshold, cv2.RETR_TREE, 1)
+    contours, _ = cv2.findContours(threshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     for cnt in contours:
-        if len(cnt)>25:
+        if cv2.contourArea(cnt) > 5:
             x,y=np.average(cnt[:,0],axis=0)
             frame0=np.vstack([frame0,[ID,0,x,y]])
             ID+=1
@@ -39,8 +38,7 @@ def labelworms(imgpath,sumarraypath,frames,output,thresh):
     else:
         frames=int(frames)
     for frame in tqdm(range(1,frames)):
-        thresh=20
-        img=images[str(frame)]['frame'][0].max(2)-sumarray/np.max(keyids)
+        img=images[str(frame)]-sumarray/np.max(keyids)
         img=np.vectorize(lambda x: 0 if x <20 else 1)(img)
         img=np.array(img*255, np.uint8)
         #plt.imshow(img,cmap='Greys')
@@ -48,16 +46,14 @@ def labelworms(imgpath,sumarraypath,frames,output,thresh):
         frame1=np.zeros((1,4),dtype=float)
 
         _, threshold = cv2.threshold(img, thresh, 255, cv2.THRESH_BINARY)
-        contours, hierarchy = cv2.findContours(threshold, cv2.RETR_TREE, 1)
+        contours, _ = cv2.findContours(threshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         for cnt in contours:
-            if len(cnt)>15:
+            if cv2.contourArea(cnt) > 5:
                 x,y=np.average(cnt[:,0],axis=0)
                 frame1=np.vstack([frame1,[ID,frame,x,y]])
                 ID+=1
         frame1=frame1[1:]
-
-        threshold = 20
 
         claimed = []
         for i in range(len(frame0)):

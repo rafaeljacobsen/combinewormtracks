@@ -5,14 +5,14 @@ import pandas as pd
 import h5py
 from PyQt5 import QtCore
 import pyqtgraph as pg
-import pickle
-import sys
-import argparse
 import time as TIME
+from PyQt5.QtWidgets import QShortcut
+from PyQt5.QtGui import QKeySequence
 
 class Window(QMainWindow):
     def __init__(self,gui):
         pg.setConfigOption('background', 'w')
+        pg.setConfigOption('foreground', 'k')
         super().__init__()
         self.gui=gui
 
@@ -112,17 +112,27 @@ class Window(QMainWindow):
         self.addchange3 = QPushButton("Add change",self)
         self.addchange3.setFixedWidth(100)
         self.addchange3.clicked.connect(self.deletetracks)
+
+        
+        self.text7 = QLabel("Option 4: Automatic combination",self)
+        self.addchange4 = QPushButton("Add change",self)
+        self.addchange4.setFixedWidth(100)
+        self.addchange4.clicked.connect(self.autocombo)
+
         self.undobutton = QPushButton("Undo",self)
         self.undobutton.setFixedWidth(100)
         self.undobutton.clicked.connect(self.undo)
         self.savebutton = QPushButton("Save",self)
         self.savebutton.setFixedWidth(100)
         self.savebutton.clicked.connect(self.save)
+        
 
         #adds widgets to layout
         rightbar.addWidget(self.text6)
         rightbar.addWidget(self.comboboxes[4])
         rightbar.addWidget(self.addchange3)
+        rightbar.addWidget(self.text7)
+        rightbar.addWidget(self.addchange4)
         rightbar.addWidget(self.undobutton)
         rightbar.addWidget(self.savebutton)
 
@@ -132,9 +142,49 @@ class Window(QMainWindow):
 
         #widgets for the top row
         self.nextplot = QPushButton('Next Plot', self)
-        self.nextplot.clicked.connect(self.gotonextplot)
+        self.nextplot.clicked.connect(lambda: self.gotonextplot(1))
+
+        # Create a shortcut for the F2 key
+        self.shortcut = QShortcut(QKeySequence("F2"), self)
+        self.shortcut.activated.connect(lambda: self.gotonextplot(1))
+        # Create a shortcut for the F1 key
+        self.shortcut = QShortcut(QKeySequence("F1"), self)
+        self.shortcut.activated.connect(lambda: self.gotoprevplot(1))
+
+        
+        # Create a shortcut for the F2 key
+        self.shortcut = QShortcut(QKeySequence("F4"), self)
+        self.shortcut.activated.connect(lambda: self.gotonextplot(10))
+        # Create a shortcut for the F1 key
+        self.shortcut = QShortcut(QKeySequence("F3"), self)
+        self.shortcut.activated.connect(lambda: self.gotoprevplot(10))
+
+        
+        # Create a shortcut for the F2 key
+        self.shortcut = QShortcut(QKeySequence("F6"), self)
+        self.shortcut.activated.connect(lambda: self.gotonextplot(100))
+        # Create a shortcut for the F1 key
+        self.shortcut = QShortcut(QKeySequence("F5"), self)
+        self.shortcut.activated.connect(lambda: self.gotoprevplot(100))
+
+        
+        # Create a shortcut for the F2 key
+        self.shortcut = QShortcut(QKeySequence("F8"), self)
+        self.shortcut.activated.connect(lambda: self.gotonextplot(500))
+        # Create a shortcut for the F1 key
+        self.shortcut = QShortcut(QKeySequence("F7"), self)
+        self.shortcut.activated.connect(lambda: self.gotoprevplot(500))
+
+        
+        # Create a shortcut for the F1 key
+        self.shortcut = QShortcut(QKeySequence("m"), self)
+        self.shortcut.activated.connect(lambda: self.gotonextcomp())
+        # Create a shortcut for the F1 key
+        self.shortcut = QShortcut(QKeySequence("n"), self)
+        self.shortcut.activated.connect(lambda: self.gotoprevcomp())
+        
         self.prevplot = QPushButton('Previous Plot', self)
-        self.prevplot.clicked.connect(self.gotoprevplot)
+        self.prevplot.clicked.connect(lambda: self.gotoprevplot(1))
         #adds a frame display icon and label
         self.framelabel = QLabel("Frame: ",self)
         self.framelabel.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
@@ -178,17 +228,17 @@ class Window(QMainWindow):
         self.label1 = QLabel("Frames shown before end time: ",self)
         self.label1.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.framesbefore = QLineEdit(self)
-        self.framesbefore.setText(str(5))
+        self.framesbefore.setText(str(self.gui.timesubt))
         self.framesbefore.editingFinished.connect(self.modprevframes)
         self.label2 = QLabel("Time range to show frames: ",self)
         self.label1.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.trackstime = QLineEdit(self)
-        self.trackstime.setText(str(70))
+        self.trackstime.setText(str(self.gui.timeadd))
         self.trackstime.editingFinished.connect(self.modtime)
         self.label3 = QLabel("Distance to show frames: ",self)
         self.label1.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.tracksdist = QLineEdit(self)
-        self.tracksdist.setText(str(150))
+        self.tracksdist.setText(str(self.gui.xdist))
         self.tracksdist.editingFinished.connect(self.moddist)
 
         #adds widgets to layout
@@ -217,19 +267,19 @@ class Window(QMainWindow):
 
     #called when the previous frames button is edited
     def modprevframes(self):
-        self.gui.prevframes=int(self.framesbefore.text())
+        self.gui.timesubt=int(self.framesbefore.text())
         self.gui.respond("update_data")
 
     #called when the tracksdist button is edited
     def moddist(self):
-        self.gui.spacedist=int(self.tracksdist.text())
+        self.gui.xdist=int(self.tracksdist.text())
         self.gui.respond("get_tracks")
         self.gui.respond("update_data")
 
     #called when the trackstime button is edited
     def modtime(self):
         if self.trackstime.text().isdigit():
-            self.gui.timedist=int(self.trackstime.text())
+            self.gui.timeadd=int(self.trackstime.text())
             self.gui.respond("get_tracks")
             self.gui.respond("update_data")
 
@@ -250,29 +300,6 @@ class Window(QMainWindow):
             errorwin.setWindowTitle("ERROR")
             errorwin.exec()
         else:
-            #if the two tracks that are combined do not include the track in question
-            if ID1 != self.gui.ends[self.gui.enditer]:
-                if ID1 in self.gui.ends:
-                    #removes the first ID from the tracks that end
-                    self.gui.ends.remove(ID1)
-                #updates the number of ends to go through
-                compindtext="Comparison "\
-                            +str(int(self.gui.enditer+1))\
-                            +" out of "\
-                            +str(int(len(self.gui.ends)))
-                self.gui.win.compind.setText(f"<p style='background-color:white'>{compindtext}</p>")
-            else:
-                #if a combination has already been made that round
-                if self.gui.switchpercombo[self.gui.enditer]>0:
-                    #remove the end of the previous combined track from the list
-                    if self.gui.lastswitch[self.gui.enditer] in self.gui.ends:
-                        self.gui.ends.remove(self.gui.lastswitch[self.gui.enditer])
-                #updates the number of ends to go through
-                compindtext="Comparison "+str(int(self.gui.enditer+1))+" out of "+str(int(len(self.gui.ends)))
-                self.gui.win.compind.setText(f"<p style='background-color:white'>{compindtext}</p>")
-                #updates the number of combos per round and the last combination
-                self.gui.switchpercombo[self.gui.enditer]+=1
-                self.gui.lastswitch[self.gui.enditer]=ID2
             #combines the tracks in the dataset
             self.gui.tracksdf.loc[self.gui.tracksdf.ID==ID2,["ID"]]=ID1
             self.gui.tracksdf=self.gui.tracksdf[np.isin(self.gui.tracksdf.ID,[ID2],invert=True)]
@@ -289,13 +316,20 @@ class Window(QMainWindow):
         #gets IDs and time
         ID1=int(self.comboboxes[2].currentText())
         ID2=int(self.comboboxes[3].currentText())
+        if len(self.timeedit.text()) == 0:
+            return
         time=int(self.timeedit.text())
-        if len(self.gui.tracksdf[(self.gui.tracksdf.ID==ID2)&(self.gui.tracksdf.time>time)])>0:
-            self.gui.tracksdf[self.gui.tracksdf.ID==ID2]=self.gui.tracksdf[(self.gui.tracksdf.ID==ID2)&(self.gui.tracksdf.time<=time)]
+
+        
+        if len(self.gui.tracksdf[(self.gui.tracksdf.ID==ID2)&(self.gui.tracksdf.time>=time)])>0:
+            nextid = np.max(self.gui.tracksdf.ID.values)+1
+            self.gui.tracksdf.loc[(self.gui.tracksdf.ID == ID2) & (self.gui.tracksdf.time >= time), 'ID'] = nextid
+
+            # self.gui.tracksdf[self.gui.tracksdf.ID==ID2]=self.gui.tracksdf[(self.gui.tracksdf.ID==ID2)&(self.gui.tracksdf.time<=time)]
             self.gui.respond("get_tracks")
             self.gui.respond("update_data")
         #switches tracks at that time
-        self.gui.tracksdf.loc[(self.gui.tracksdf.ID==ID1)&(self.gui.tracksdf.time>=time),["ID"]]=ID2
+        self.gui.tracksdf.loc[(self.gui.tracksdf.ID==ID1) & (self.gui.tracksdf.time>=time), 'ID']=ID2
         #writes to output file
         self.writefile.write("Switched track "+str(ID1)+" to "+str(ID2)+" at time "+str(time)+"\n")
         self.gui.respond("update_data")
@@ -305,18 +339,51 @@ class Window(QMainWindow):
         self.gui.trackstemp=self.gui.tracksdf.copy()
         self.gui.endstemp=self.gui.ends.copy()
         ID1=int(self.comboboxes[4].currentText())
-        #if the track is not the the track in question
-        if ID1 != self.gui.ends[self.gui.enditer]:
-            #if the track is in the ends list, remove it
-            if ID1 in self.gui.ends:
-                self.gui.ends.remove(ID1)
-            #updates the number of ends to go through
-            compindtext="Comparison "+str(int(self.gui.enditer+1))+" out of "+str(int(len(self.gui.ends)))
-            self.gui.win.compind.setText(f"<p style='background-color:white'>{compindtext}</p>")
         #edits the tracksdf
         self.gui.tracksdf=self.gui.tracksdf[(self.gui.tracksdf.ID!=ID1)]
         self.writefile.write("Deleted ID "+str(ID1)+"\n")
         self.gui.respond("update_data")
+
+    #the automatic combination function
+    def autocombo(self):
+        ID2=self.gui.ID
+        time=self.gui.endtime
+        
+        
+        neardict = self.gui.tracksdf[(self.gui.tracksdf.time > time - 5)\
+                                     & (self.gui.tracksdf.time < time + 40)\
+                                     & (self.gui.tracksdf.ID != ID2)]
+        
+        currenttrack = self.gui.tracksdf[(self.gui.tracksdf.time == time)\
+                                     & (self.gui.tracksdf.ID == ID2)]
+        
+        # checks if the ID is in the dataframe
+        if len(list(currenttrack.x)) == 0 or len(list(neardict.x)) == 0:
+            return
+        x_ref=list(currenttrack.x)[0]
+        y_ref=list(currenttrack.y)[0]
+
+        closest_idx = ((neardict.x - x_ref) ** 2 + (neardict.y - y_ref) ** 2).idxmin()
+
+        ID1 = neardict.loc[closest_idx].ID
+
+        
+        self.gui.trackstemp=self.gui.tracksdf.copy()
+        self.gui.endstemp=self.gui.ends
+        
+        if len(self.gui.tracksdf[(self.gui.tracksdf.ID==ID2)&(self.gui.tracksdf.time>=time)])>0:
+            nextid = np.max(self.gui.tracksdf.ID.values)+1
+            self.gui.tracksdf.loc[(self.gui.tracksdf.ID == ID2) & (self.gui.tracksdf.time >= time), 'ID'] = nextid
+
+            # self.gui.tracksdf[self.gui.tracksdf.ID==ID2]=self.gui.tracksdf[(self.gui.tracksdf.ID==ID2)&(self.gui.tracksdf.time<=time)]
+            self.gui.respond("get_tracks")
+            self.gui.respond("update_data")
+        #switches tracks at that time
+        self.gui.tracksdf.loc[(self.gui.tracksdf.ID==ID1) & (self.gui.tracksdf.time>=time), 'ID']=ID2
+        #writes to output file
+        self.writefile.write("Switched track "+str(ID1)+" to "+str(ID2)+" at time "+str(time)+"\n")
+        self.gui.respond("update_data")
+
 
     def undo(self):
         self.gui.tracksdf=self.gui.trackstemp
@@ -327,6 +394,7 @@ class Window(QMainWindow):
 
 
     def save(self):
+        print("Saved")
         self.gui.tracksdf.to_csv("outputtracks.csv")
 
     #go to the next comparison
@@ -357,16 +425,25 @@ class Window(QMainWindow):
         if self.frameshow.text().isdigit():
             self.gui.frame=int(self.frameshow.text())
             if self.gui.frame < self.gui.maxframe and self.gui.frame >= 0:
+                # Refresh track selection before re-drawing so the displayed tracks
+                # don't lag behind until some other UI event (like leaving a textbox).
+                self.gui.respond("get_tracks")
                 self.gui.respond("update_data")
 
     #go to the next plot
-    def gotonextplot(self):
-        if self.gui.frame < self.gui.maxframe-1:
-            self.gui.frame+=1
+    def gotonextplot(self,num):
+        if self.gui.frame < self.gui.maxframe-num:
+            self.gui.frame+=num
+        # Always refresh track selection before drawing.
+        self.gui.respond("get_tracks")
         self.gui.respond("update_data")
 
     #go to the previous plot
-    def gotoprevplot(self):
-        if self.gui.frame >= 1:
-            self.gui.frame-=1
+    def gotoprevplot(self,num):
+        if self.gui.frame >= num:
+            self.gui.frame-=num
+        # Always refresh track selection before drawing.
+        self.gui.respond("get_tracks")
         self.gui.respond("update_data")
+
+        

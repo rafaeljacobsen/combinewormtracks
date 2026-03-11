@@ -5,6 +5,7 @@ import pickle
 import sys
 import h5py
 import argparse
+
 def findpair(ID2,history,possiblecombos):
     if ID2 in list(possiblecombos.ID1):
         #need to consider that there may be more than one possibility for an end point
@@ -25,13 +26,16 @@ def precombinewormtracks(path,type):
     if path[-3:]=="npy":
         tracks=np.load(path)
         tracksdf=pd.DataFrame(tracks, columns = ['ID','time','x','y'])
+        print("File type: npy")
     elif path[-3:]=="csv":
+        print("File type: csv")
         if type == "numpy":
             tracksdf=pd.DataFrame(np.genfromtxt(path), columns = ['ID','time','x','y'])
         else:
             tracksdf=pd.read_csv(path)
-            tracksdf=tracksdf.drop(columns=['Unnamed: 0'])
+            tracksdf=tracksdf.drop(columns=['Unnamed: 0'], errors='ignore')
     elif path[-2:]=="h5":
+        print("File type: h5")
         img=h5py.File(path,"r+")
         tracks=img["points"]
         tracksdf=pd.DataFrame(tracks, columns = ['ID','time','x','y'])
@@ -61,9 +65,10 @@ def precombinewormtracks(path,type):
     #tracksdf=tracksdf[np.isin(np.asarray(tracksdf.ID),meanangles[meanangles.meanangle>=120].index)]
 
     #creates dataframe with start and end times for each ID
+    print("Creating start/end times for each ID:")
     startend=pd.DataFrame(columns=["start","end"])
     tracksdf=tracksdf.dropna()
-    for ID in np.unique(tracksdf.ID).astype(int):
+    for ID in tqdm(np.unique(tracksdf.ID).astype(int)):
         if ID < 0:
             print(ID)
             tracksdf=tracksdf[tracksdf.ID!=ID]
@@ -77,7 +82,7 @@ def precombinewormtracks(path,type):
     print("Finds all possible track combinations and drops short tracks")
     for ID in tqdm(np.unique(tracksdf.ID)):
         length=len(tracksdf[tracksdf.ID==ID])
-        if length<4:
+        if length<15:
             idstodrop.append(ID)
             continue
         #print(ID)
@@ -114,10 +119,12 @@ def precombinewormtracks(path,type):
         if len(tracksdf[(tracksdf.ID==ID1)].values) == 1 or len(tracksdf[(tracksdf.ID==ID2)].values) == 1:
             continue
         #finds the difference between the last points of ID1
+        last_time = tracksdf.loc[(tracksdf.ID == ID1) & (tracksdf.time < startend.loc[ID1].end), 'time'].max()
         diff1=(tracksdf[(tracksdf.ID==ID1) & (tracksdf.time==startend.loc[ID1].end)][["x","y"]].values[0]
-               -tracksdf[(tracksdf.ID==ID1) & (tracksdf.time==startend.loc[ID1].end-1)][["x","y"]].values[0])
+               -tracksdf[(tracksdf.ID==ID1) & (tracksdf.time==last_time)][["x","y"]].values[0])
         #finds the difference between the first points of ID2
-        diff2=(tracksdf[(tracksdf.ID==ID2) & (tracksdf.time==startend.loc[ID2].start+1)][["x","y"]].values[0]
+        next_time = tracksdf.loc[(tracksdf.ID == ID2) & (tracksdf.time > startend.loc[ID2].start), 'time'].min()
+        diff2=(tracksdf[(tracksdf.ID==ID2) & (tracksdf.time==next_time)][["x","y"]].values[0]
                -tracksdf[(tracksdf.ID==ID2) & (tracksdf.time==startend.loc[ID2].start)][["x","y"]].values[0])
         #finds the location of the end of ID1
         ID1end=tracksdf[(tracksdf.ID==ID1)&(tracksdf.time==max(tracksdf[tracksdf.ID==ID1].time))][["x","y"]].values[0]
@@ -143,34 +150,39 @@ def precombinewormtracks(path,type):
                       & (lengths[:,0]>=4)
                       & (lengths[:,1]>4)
                       & (np.asarray(angles)<60))[0]
+    #filters out duplicates
+    confirmeds=confirmeds[~possiblecombos.loc[confirmeds, ['ID1', 'ID2']].duplicated(keep=False)]
 
     print("number of tracks combined: "+str(len(confirmeds)))
 
-    if np.any(np.unique(possiblecombos.loc[confirmeds].ID1,return_counts=True)[1]!=1) or np.any(np.unique(possiblecombos.loc[confirmeds].ID2,return_counts=True)[1]!=1):
+    if possiblecombos.loc[confirmeds, 'ID1'].duplicated().any() or possiblecombos.loc[confirmeds, 'ID2'].duplicated().any():
         print("ERROR: PRELIMINARY CLASSIFICATION FAILED: DUPLICATE MADE")
 
+    print("Applying track combinations:")
     with open('combinedids.txt', 'w') as f:
         f.write('Dropping: '+str(idstodrop))
-        for i in confirmeds: #i represents the index of correct combo
+        for i in tqdm(confirmeds): #i represents the index of correct combo
             ID1,ID2=possiblecombos.loc[i][["ID1","ID2"]].values
             tracksdf.loc[tracksdf.ID==ID2,["ID"]]=ID1
             idstodrop.append(ID2)
             f.write('ID1: '+str(ID1)+', ID2: '+str(ID2))
             f.write('\n')
-        tracksdf=tracksdf[np.isin(tracksdf.ID,idstodrop,invert=True)]
+        # tracksdf=tracksdf[np.isin(tracksdf.ID,idstodrop,invert=True)]
 
 
     #creates dataframe with start and end times for each ID
+    print("Updating start/end times after combining:")
     startend=pd.DataFrame(columns=["start","end"])
-    for ID in np.unique(tracksdf.ID).astype(int):
+    for ID in tqdm(np.unique(tracksdf.ID).astype(int)):
         startend.loc[ID,:]=int(np.min(tracksdf.loc[tracksdf.ID==ID].time)),int(np.max(tracksdf.loc[tracksdf.ID==ID].time))
     startend.astype(int)
 
     #creates density map of where tracks end
+    print("Creating density map of track endings:")
     xs=[]
     ys=[]
     offscreens=[]
-    for ID in np.unique(tracksdf.ID.values):
+    for ID in tqdm(np.unique(tracksdf.ID.values)):
         x=np.round(tracksdf[(tracksdf.ID==ID)&(tracksdf.time==startend.loc[ID].end)].x.values[0],1)
         y=np.round(tracksdf[(tracksdf.ID==ID)&(tracksdf.time==startend.loc[ID].end)].y.values[0],1)
         if (x<10) or (x>np.max(tracksdf.x)-10) or (y<10) or (y>np.max(tracksdf.y)-10):
@@ -184,7 +196,7 @@ def precombinewormtracks(path,type):
 
     statpixels=[]
     print("Finding stationary pixels:")
-    for index1,index2 in tqdm(zip(densityindexes[0],densityindexes[1])):
+    for index1,index2 in zip(tqdm(densityindexes[0]),densityindexes[1]):
         tx=densityhist[1][index1]
         ty=densityhist[1][index2]
         for ID in np.unique(tracksdf.ID.values):
@@ -193,15 +205,15 @@ def precombinewormtracks(path,type):
             if (tx-5<x and x<tx+5) and (ty-5 < y and y < ty+5):
                 if len(tracksdf[tracksdf.ID==ID])<5 or (np.max(tracksdf[tracksdf.ID==ID].x.values)-np.min(tracksdf[tracksdf.ID==ID].x.values)<10 and np.max(tracksdf[tracksdf.ID==ID].y.values)-np.min(tracksdf[tracksdf.ID==ID].y.values)<10):
                     statpixels.append(ID)
-                    #print(str(int(ID)) + ": " + str(x) + " " + str(y) + ", time = " + str(int(startend.loc[ID].end)) + ", number = " + str(len(tracksdf[tracksdf.ID==ID])))
 
     print("number of tracks that are stationary: "+str(len(statpixels)))
     #drops IDs that are probably still frames on screen
     tracksdf=tracksdf[np.isin(tracksdf.ID,statpixels,invert=True)]
 
     #creates dataframe with start and end times for each ID
+    print("Updating start/end times after removing stationary tracks:")
     startend=pd.DataFrame(columns=["start","end"])
-    for ID in np.unique(tracksdf.ID).astype(int):
+    for ID in tqdm(np.unique(tracksdf.ID).astype(int)):
         startend.loc[ID,:]=int(np.min(tracksdf.loc[tracksdf.ID==ID].time)),int(np.max(tracksdf.loc[tracksdf.ID==ID].time))
     startend.astype(int)
 
@@ -216,21 +228,35 @@ def precombinewormtracks(path,type):
                     startlocation=tracksdf.loc[(tracksdf.ID==startID) & (tracksdf.time==end+1),["x","y"]].values
                     if np.linalg.norm(startlocation-endlocation) < 20:
                         possiblecombos.loc[len(possiblecombos.index)] = [int(ID),startID,endindex,end+1]#,np.linalg.norm(startlocation-endlocation)]
+    
+    # #removes tracks that end nowhere near anything else
+    # ends=[i for i in np.unique(tracksdf.ID.values) if i not in np.asarray(offscreens)]
+    # ends=[i for i in ends if np.max(tracksdf[tracksdf.ID==i].time.values)<np.max(tracksdf.time.values)-15]
+    
+    
+    # endstodrop = [0]
+    # totalendstodrop = 0
+    # while len(endstodrop) != 0:
+    #     endstodrop=[]
+    #     last_occurrences = tracksdf[tracksdf['ID'].isin(ends)].groupby('ID').last()
+    #     # check if any other ids are nearby
+    #     for ID, last_row in last_occurrences.iterrows():
+    #         nearby = tracksdf[(tracksdf['ID'] != ID) &
+    #                         (abs(tracksdf['x'] - last_row['x']) <= 150) &
+    #                         (abs(tracksdf['y'] - last_row['y']) <= 150) &
+    #                         (abs(tracksdf['time'] - last_row['time']) <= 50)]
+    #         if nearby.empty:
+    #             endstodrop.append(ID)
+    #     tracksdf = tracksdf[~tracksdf['ID'].isin(endstodrop)]
+    #     totalendstodrop+=len(endstodrop)
+    # print("Dropped",totalendstodrop," due to ending nowhere")
 
-    #will remove combos, shouldn't be how this is organized anymore
-    #combos=[]
-    #for ID in np.unique(tracksdf.ID).astype(int):
-    #    combo=list(np.flip(findpairreverse(ID,[],possiblecombos))[:-1])+findpair(ID,[],possiblecombos)
-    #    len(combo)>1 and combos.append(sorted(combo))
-
-    #uniquecombos=[]
-    #for combo in combos:
-    #    if combo not in uniquecombos:
-    #        uniquecombos.append(combo)
-    #combos=uniquecombos
-    #print("Number of combinations: "+str(len(combos)))
+    # ends=[i for i in np.unique(tracksdf.ID.values) if i not in np.asarray(offscreens)]
+    # ends=[i for i in ends if np.max(tracksdf[tracksdf.ID==i].time.values)<np.max(tracksdf.time.values)-15]
+    
 
     outputs={}
+    print("Identifying tracks that end mid-screen:")
     ends=[i for i in np.unique(tracksdf.ID.values) if i not in np.asarray(offscreens)]
     ends=[i for i in ends if np.max(tracksdf[tracksdf.ID==i].time.values)<np.max(tracksdf.time.values)-15]
     outputs["ends"]=[x for _, x in sorted(zip(startend.loc[ends].end.values, ends))]
@@ -238,6 +264,7 @@ def precombinewormtracks(path,type):
     outputs["tracksdf"]=tracksdf
     outputs["startend"]=startend
 
+    print("Saving output to precombinewormtracks.pickle")
     with open('precombinewormtracks.pickle', 'wb') as handle:
         pickle.dump(outputs, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
